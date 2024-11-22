@@ -1,8 +1,9 @@
+version: "3.8"
+
 services:
   webserver:
-    build:
-      context: .
+    image: httpd:latest # Use the official Apache HTTP server image
     ports:
-      - "8080:80"
+      - "8080:80"       # Map port 80 in the container to port 8080 on the host
     volumes:
-      - ./content:/usr/share/nginx/html
+      - ./content:/usr/local/apache2/htdocs/ # Mount the shared volume to the default httpd document root
