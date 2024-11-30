@@ -1,11 +1,13 @@
+# locust.py
+
 import os
 import random
-import json
 from locust import HttpUser, task, between
+import json
 
 class APILoadTestUser(HttpUser):
     wait_time = between(1, 5)  # Wait between 1 to 5 seconds between tasks
-    
+
     # Load configuration from a JSON file
     def on_start(self):
         config_path = "./config.json"
@@ -25,7 +27,7 @@ class APILoadTestUser(HttpUser):
             raise ValueError(f"Content directory '{self.content_directory}' does not exist.")
 
     @task
-    def post_file_content(self):
+    def upload_file(self):
         # Get all text files from the content directory
         files = [f for f in os.listdir(self.content_directory) if f.endswith(".txt")]
         if not files:
@@ -41,27 +43,28 @@ class APILoadTestUser(HttpUser):
             print(f"File '{file_path}' does not exist or is not accessible!")
             return
         
-        with open(file_path, "r") as file:
+        with open(file_path, "rb") as file:
             file_content = file.read()
-        
-        # Create the JSON payload
-        json_payload = {
-            "content": file_content  # Only the file content is included in the payload
-        }
-        
-        # Send a POST request to the URL constructed from the target URL and filename
-        url = f"{self.target_url}/{random_file}"
-        with self.client.post(url, json=json_payload, catch_response=True) as response:
-            if response.status_code == 200:
-                print(f"Successfully posted content for {random_file}")
-            else:
-                response.failure(f"Failed to post content for {random_file}: {response.status_code} - {response.text}")
 
-# Main function for running the script standalone
+        # Prepare multipart form data (only the file)
+        files = {
+            "file": (random_file, file_content, "text/plain")
+        }
+
+        # Send a POST request to the /upload/ endpoint
+        with self.client.post("/upload/", files=files, catch_response=True) as response:
+            if response.status_code == 200:
+                print(f"Successfully uploaded '{random_file}'")
+                response.success()
+            else:
+                print(f"Failed to upload '{random_file}': {response.status_code} - {response.text}")
+                response.failure(f"Failed to upload '{random_file}': {response.status_code} - {response.text}")
+
+# Main function for running the script standalone (optional)
 if __name__ == "__main__":
     import sys
     from locust import events, runners
-    
+
     # Standalone Locust runner for debugging
     class DebugAPILoadTestUser(APILoadTestUser):
         def on_start(self):
@@ -70,10 +73,10 @@ if __name__ == "__main__":
         
         def run_single_task(self):
             try:
-                self.post_file_content()
+                self.upload_file()
             except Exception as e:
                 print(f"Error while running task: {e}")
-    
+
     # Run a single instance of the user for testing
     user = DebugAPILoadTestUser(runners.MasterRunner(env=None))
     user.on_start()
